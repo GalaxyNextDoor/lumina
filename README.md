@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# LuminaLog
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+LuminaLog is a high-performance, user-friendly log analysis platform built with React, TypeScript, Vite, and Tailwind CSS. It features a cybersecurity-themed dark mode interface and a dual-mode Gemini AI assistant for conversational analysis and natural language-to-query translation.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Before you begin, ensure you have the following installed:
+- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- A Google Gemini API Key. You can get yours from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
-## React Compiler
+## Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Follow these steps to set up and run the project locally.
 
-## Expanding the ESLint configuration
+### 1. Install Dependencies
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Open your terminal, navigate to the project root directory, and run the following command to install the required dependencies:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Configure Environment Variables
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Create a `.env` file in the root of the project. You can copy the structure from the provided `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open the `.env` file in your editor and add your Gemini API Key:
+   ```env
+   VITE_GEMINI_API_KEY=your_actual_api_key_here
+   ```
+   *Optional: You can also strictly define the Gemini model version by uncommenting the relevant line in the `.env` file.*
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 3. Start the Development Server
+
+Start the application in development mode with Hot Module Replacement (HMR):
+
+```bash
+npm run dev
 ```
+
+Your application should now be accessible in your browser (typically at `http://localhost:5173`).
+
+## Build for Production
+
+To create a production-ready build, run:
+
+```bash
+npm run build
+```
+This will compile the TypeScript code and bundle the application into the `dist` directory. You can preview the production build locally using:
+
+```bash
+npm run preview
+```
+
+## Core Technologies
+
+- [React 19](https://react.dev/)
+- [Vite 6](https://vitejs.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS 4](https://tailwindcss.com/)
+- [Google Gemini API](https://ai.google.dev/) (`@google/generative-ai`) for AI integrations
+- [Radix UI](https://www.radix-ui.com/) for accessible UI primitives
+- [Lucide React](https://lucide.dev/) for icons
