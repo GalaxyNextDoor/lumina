@@ -1,19 +1,20 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { LogEntry, QueryFilter } from "@/types/log"
 
-const API_VERSION_TRIES: Array<{ apiVersion: "v1" } | undefined> = [
-  { apiVersion: "v1" },
-  undefined,
-]
+/**
+ * The SDK handles API version routing internally — we don't need to force it.
+ * Passing undefined lets the SDK pick the right version for each model.
+ */
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
 const envModel =
   (import.meta.env.VITE_GEMINI_MODEL as string | undefined)?.trim() || undefined
 
 /**
- * Ordered list: env override first, then stable/current Flash IDs for `v1beta` generateContent.
- * Note: `gemini-1.5-flash-latest` returns 404 on many keys — use `gemini-flash-latest` or versioned IDs.
- * @see https://ai.google.dev/gemini-api/docs/models/gemini
+ * Ordered list of model candidates to try.
+ * env override first, then current stable models.
+ * As of April 2026: gemini-2.0-flash and gemini-1.5-flash are deprecated/removed.
+ * @see https://ai.google.dev/gemini-api/docs/models
  */
 function modelCandidates(): string[] {
   const base = [
@@ -21,9 +22,6 @@ function modelCandidates(): string[] {
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
     "gemini-flash-latest",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-001",
-    "gemini-1.5-flash",
   ].filter((m): m is string => Boolean(m && m.length > 0))
   return [...new Set(base)]
 }
@@ -57,22 +55,31 @@ function safeResponseText(res: {
   }
 }
 
+/** Add a timeout wrapper so the UI never hangs forever. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s`)), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
+
 async function generateWithFallback(prompt: string): Promise<string> {
   const genAI = getGenAI()
   if (!genAI) throw new Error("No API key configured")
 
   let lastErr: unknown
   for (const modelName of modelCandidates()) {
-    for (const opts of API_VERSION_TRIES) {
-      try {
-        const model = opts
-          ? genAI.getGenerativeModel({ model: modelName }, opts)
-          : genAI.getGenerativeModel({ model: modelName })
-        const res = await model.generateContent(prompt)
-        return safeResponseText(res)
-      } catch (err) {
-        lastErr = err
-      }
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName })
+      const res = await withTimeout(model.generateContent(prompt), 30_000)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return safeResponseText(res as any)
+    } catch (err) {
+      lastErr = err
+      /* Continue to next model candidate */
     }
   }
   throw lastErr instanceof Error
@@ -146,13 +153,21 @@ export async function analyzeLogs(
     message: l.message,
   }))
 
-  const systemPreamble = `You are LuminaLog, a senior SOC analyst assistant. Be concise, actionable, and security-focused. The user sees ONLY this JSON log sample from their current grid view. If evidence is insufficient, say so.`
+  const systemPreamble = `You are LuminaLog, a senior SOC analyst assistant.
+IMPORTANT RULES:
+- Always respond in **natural language** (plain English), NOT raw JSON.
+- Be concise, actionable, and security-focused.
+- Use bullet points or short paragraphs for readability.
+- Summarize patterns, flag anomalies, and suggest next steps.
+- The user sees ONLY this log sample from their current grid view (${snippet.length} rows).
+- If evidence is insufficient, say so clearly.
+- NEVER just echo back the logs as JSON.`
 
   if (!genAI) {
     return `[offline] Set VITE_GEMINI_API_KEY to enable live analysis.\n\nYou asked: "${userPrompt}"\nSample: ${snippet.length} rows. Example observation: repeated Auth failures often suggest credential stuffing or scan activity—check geo, UA, and user names.`
   }
 
-  const prompt = `${systemPreamble}\n\nLogs JSON:\n${JSON.stringify(snippet)}\n\nUser question:\n${userPrompt}`
+  const prompt = `${systemPreamble}\n\nLogs JSON (for your analysis only — do NOT repeat in response):\n${JSON.stringify(snippet)}\n\nUser question:\n${userPrompt}`
   return generateWithFallback(prompt)
 }
 
@@ -163,12 +178,20 @@ export async function translateToQuery(
   const genAI = getGenAI()
   const hints = heuristicQueryFilter(naturalLanguagePrompt)
 
-  const instruction = `You convert natural language log search requests into ONE JSON object only. Fields (all optional): level (INFO|WARN|ERROR|CRITICAL), source (Firewall|Auth|Kernel or ssh/firewall/kernel aliases), messageContains (short substring), time (15m|1h|24h|7d|all).
+  const instruction = `You convert natural language log search requests into ONE JSON object only.
+Available fields (all optional, use ONLY what the user asked for — do NOT invent extra constraints):
+- level: one of INFO, WARN, ERROR, or CRITICAL. Only include if the user explicitly mentions a severity.
+- source: one of Auth, Firewall, or Kernel (map SSH/login/authentication to Auth, iptables to Firewall). Only include if the user mentions a source.
+- messageContains: a SHORT keyword substring to match against log messages. Keep it broad (e.g. "Failed" not "Failed password for"). Only include if the user mentions specific content.
+- time: one of 15m, 1h, 24h, 7d, or all. Only include if the user mentions a time range.
+
 Examples:
 - "Show me only errors" -> {"level":"ERROR"}
-- "SSH failures last hour" -> {"source":"Auth","messageContains":"Failed","time":"1h"}
+- "SSH failures last hour" -> {"source":"Auth","level":"ERROR","time":"1h"}
 - "Firewall blocks today" -> {"source":"Firewall","messageContains":"BLOCK","time":"24h"}
-Return ONLY valid JSON, no markdown.`
+- "What happened in the last 15 minutes" -> {"time":"15m"}
+- "Show everything" -> {}
+Return ONLY valid JSON, no markdown, no explanation.`
 
   if (!genAI) {
     return hints

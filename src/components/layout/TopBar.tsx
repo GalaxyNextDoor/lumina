@@ -1,5 +1,5 @@
-import { Loader2, Sparkles, Terminal } from "lucide-react"
-import { useState } from "react"
+import { Loader2, Sparkles, Terminal, X } from "lucide-react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -27,6 +27,7 @@ export function TopBar() {
   const {
     searchText,
     setSearchText,
+    structuredFilter,
     setStructuredFilter,
     setTimePreset,
     timePreset,
@@ -34,14 +35,28 @@ export function TopBar() {
   } = useDashboard()
   const [busy, setBusy] = useState(false)
 
+  const hasAIFilter = useMemo(() => {
+    return Object.values(structuredFilter).some((v) => v !== undefined && v !== "")
+  }, [structuredFilter])
+
+  function clearAIFilters() {
+    setStructuredFilter({})
+  }
+
   async function runMagic() {
-    if (!searchText.trim()) return
+    const query = searchText.trim()
+    if (!query) return
     setBusy(true)
     try {
-      const q = await translateToQuery(searchText)
-      /* Replace NL-derived filters each run — merge was stacking constraints and could empty the grid. */
+      const q = await translateToQuery(query)
+      /* Apply structured filter from AI, then clear the NL text so it doesn't also
+         act as a raw text filter (the structured filter already encodes the intent). */
       setStructuredFilter(q)
+      setSearchText("")
       setActiveTab("logs")
+    } catch (err) {
+      console.error("AI query translation failed:", err)
+      /* Fallback: keep the search text as a raw text filter */
     } finally {
       setBusy(false)
     }
@@ -80,6 +95,26 @@ export function TopBar() {
             </TooltipTrigger>
             <TooltipContent>Magic: NL → filters (Gemini)</TooltipContent>
           </Tooltip>
+          {hasAIFilter && (
+            <div className="flex items-center gap-1 rounded-full border border-cyan-800/50 bg-cyan-950/40 px-2.5 py-1 font-sans text-[10px] text-cyan-300">
+              <Sparkles className="size-3 text-cyan-400" />
+              <span>
+                AI filter
+                {structuredFilter.level && ` · ${structuredFilter.level}`}
+                {structuredFilter.source && ` · ${structuredFilter.source}`}
+                {structuredFilter.time && ` · ${structuredFilter.time}`}
+                {structuredFilter.messageContains && ` · "${structuredFilter.messageContains}"`}
+              </span>
+              <button
+                type="button"
+                onClick={clearAIFilters}
+                className="ml-1 rounded-full p-0.5 text-cyan-400 hover:bg-cyan-800/40 hover:text-cyan-200"
+                aria-label="Clear AI filters"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LogFileImport />

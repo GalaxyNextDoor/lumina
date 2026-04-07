@@ -53,10 +53,8 @@ export function filterLogs(
   )
 
   const sourceFilter = structured.source?.trim().toLowerCase()
-  const isAIActive = Object.keys(structured).length > 0
-  const needle = isAIActive 
-    ? (structured.messageContains?.trim() || "").toLowerCase()
-    : searchText.trim().toLowerCase()
+  const aiNeedle = (structured.messageContains?.trim() || "").toLowerCase()
+  const rawNeedle = searchText.trim().toLowerCase()
 
   return logs.filter((row) => {
     if (ms !== null) {
@@ -77,9 +75,15 @@ export function filterLogs(
       const mapped = srcMap[sourceFilter] ?? sourceFilter
       if (row.source.toLowerCase() !== mapped) return false
     }
-    if (needle) {
+    /* AI messageContains filter */
+    if (aiNeedle) {
       const hay = `${row.message} ${row.source} ${row.level}`.toLowerCase()
-      if (!hay.includes(needle)) return false
+      if (!hay.includes(aiNeedle)) return false
+    }
+    /* Raw text search (independent of AI filters) */
+    if (rawNeedle) {
+      const hay = `${row.timestamp} ${row.message} ${row.source} ${row.level}`.toLowerCase()
+      if (!hay.includes(rawNeedle)) return false
     }
     return true
   })

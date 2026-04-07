@@ -60,8 +60,16 @@ export function ChatPanel() {
     try {
       const q = await translateToQuery(lastUser.text)
       setStructuredFilter(q)
-      setSearchText(lastUser.text)
+      setSearchText("")
       setActiveTab("logs")
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: `[error] Could not apply filter: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ])
     } finally {
       setBusy(false)
     }
@@ -105,7 +113,7 @@ export function ChatPanel() {
               className={
                 m.role === "user"
                   ? "ml-6 rounded-lg border border-cyan-900/40 bg-cyan-950/30 p-2 font-sans text-xs text-cyan-50"
-                  : "mr-4 rounded-lg border border-slate-800 bg-slate-900/50 p-2 font-sans text-xs text-slate-200"
+                  : "mr-4 rounded-lg border border-slate-800 bg-slate-900/50 p-2 font-sans text-xs leading-relaxed text-slate-200 whitespace-pre-wrap"
               }
             >
               {m.text}
